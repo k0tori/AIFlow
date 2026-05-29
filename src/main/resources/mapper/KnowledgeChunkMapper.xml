@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aiflow.mapper.KnowledgeChunkMapper">
+
+    <insert id="insertBatch" parameterType="list">
+        INSERT INTO knowledge_chunk (document_id, chunk_index, content, embedding)
+        VALUES
+        <foreach collection="list" item="chunk" separator=",">
+            (#{chunk.documentId}, #{chunk.chunkIndex}, #{chunk.content}, #{chunk.embedding}::vector)
+        </foreach>
+    </insert>
+
+</mapper>
