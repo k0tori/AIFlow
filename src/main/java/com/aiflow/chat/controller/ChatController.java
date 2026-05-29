@@ -22,4 +22,9 @@ public class ChatController {
     public Flux<String> chat(@Valid @RequestBody ChatRequest request) {
         return chatService.streamChat(request);
     }
+
+    @PostMapping(value = "/agent", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> agentChat(@Valid @RequestBody ChatRequest request) {
+        return chatService.streamAgentChat(request);
+    }
 }

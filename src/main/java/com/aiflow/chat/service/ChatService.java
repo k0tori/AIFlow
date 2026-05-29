@@ -1,7 +1,9 @@
 package com.aiflow.chat.service;
 
+import com.aiflow.agent.service.AgentService;
 import com.aiflow.chat.dto.ChatRequest;
 import com.aiflow.chat.memory.ChatMemoryService;
+import com.aiflow.rag.service.RagService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -22,14 +24,18 @@ public class ChatService {
 
     private final ChatClient.Builder chatClientBuilder;
     private final ChatMemoryService chatMemoryService;
+    private final TokenUsageService tokenUsageService;
+    private final RagService ragService;
+    private final AgentService agentService;
 
     private final Resource systemPrompt = new ClassPathResource("prompts/system/system-prompt.txt");
 
     public Flux<String> streamChat(ChatRequest request) {
-        ChatClient chatClient = chatClientBuilder.build();
-
         // Load history
         List<String> history = chatMemoryService.getHistory(request.getSessionId());
+
+        // Build RAG context
+        String ragContext = ragService.buildRagContext(request.getMessage());
 
         // Build prompt
         String system = readResource(systemPrompt);
@@ -40,18 +46,30 @@ public class ChatService {
                 })
                 .collect(Collectors.joining("\n"));
 
-        String fullPrompt = system + "\n\n" + historyText + "\n\nUser: " + request.getMessage();
+        String fullPrompt = system + "\n\n" + ragContext + "\n\n" + historyText + "\n\nUser: " + request.getMessage();
 
         // Save user message
         chatMemoryService.addMessage(request.getSessionId(), "User", request.getMessage());
 
         // Stream response
+        ChatClient chatClient = chatClientBuilder.build();
         return chatClient.prompt()
                 .user(fullPrompt)
                 .stream()
                 .content()
                 .doOnComplete(() -> {
-                    chatMemoryService.addMessage(request.getSessionId(), "Assistant", "...");
+                    // TODO: Save assistant message and token usage
+                });
+    }
+
+    public Flux<String> streamAgentChat(ChatRequest request) {
+        // Save user message
+        chatMemoryService.addMessage(request.getSessionId(), "User", request.getMessage());
+
+        // Use agent with tools
+        return agentService.streamAgent(request.getMessage())
+                .doOnComplete(() -> {
+                    // TODO: Save assistant message
                 });
     }
 
