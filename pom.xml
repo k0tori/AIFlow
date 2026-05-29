@@ -107,6 +107,18 @@
 
         <!-- ====== Security ====== -->
 
+        <!-- Spring Security (reactive) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Jakarta Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <!-- JJWT (Java JWT) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
