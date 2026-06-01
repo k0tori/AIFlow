@@ -1,0 +1,658 @@
+# AIFlow 智能知识库 Agent 平台 - 项目初始化架构文档
+
+## 1. 项目定位
+
+AIFlow 是一个基于 Spring AI + RAG + 向量检索 的智能知识库 Agent 平台。
+
+项目目标：
+
+* 支持文档上传（PDF/Markdown/TXT/DOCX）
+* 自动解析文档并切片（Chunk）
+* 使用 Embedding 模型进行向量化
+* 使用 pgvector 实现向量存储与相似度检索
+* 基于 RAG 实现知识库问答
+* 支持 SSE 流式 AI 输出
+* 支持 Tool Calling Agent
+* 支持 Redis 会话记忆
+* 支持 Docker 容器化部署
+
+项目偏向：
+
+* AI 工程化
+* 后端架构
+* RAG Pipeline
+* 向量检索
+* Agent Tool Calling
+
+不是：
+
+* 大模型训练
+* AI 算法研究
+* 前端复杂 UI
+
+---
+
+# 2. 技术栈
+
+## 后端
+
+* Java 21
+* Spring Boot 3.x
+* Spring AI
+* Spring WebFlux
+* MyBatis-Plus
+* Redis
+* RabbitMQ
+* PostgreSQL
+* pgvector
+* Docker
+* Maven
+
+## AI 能力
+
+* OpenAI Compatible API
+* DeepSeek API
+* Ollama（可选）
+* Embedding
+* RAG
+* Tool Calling
+
+## 前端
+
+前端保持简单：
+
+* Vue3
+* Element Plus
+* Axios
+* Markdown 渲染
+
+前端不作为重点。
+
+---
+
+# 3. 项目架构
+
+当前阶段采用：
+
+单体架构 + 模块化设计
+
+原因：
+
+* 降低开发复杂度
+* 提升 AI IDE 代码生成稳定性
+* 聚焦 AI Pipeline
+* 后期可扩展为微服务
+
+采用经典分层：
+
+controller
+service
+manager
+mapper
+entity
+dto
+vo
+
+---
+
+# 4. 项目目录结构
+
+```plaintext
+aiflow-platform
+├── aiflow-common
+├── aiflow-auth
+├── aiflow-chat
+├── aiflow-rag
+├── aiflow-agent
+├── aiflow-file
+├── aiflow-search
+├── aiflow-tools
+└── aiflow-web
+```
+
+---
+
+# 5. 各模块职责
+
+## aiflow-common
+
+公共模块：
+
+包含：
+
+* Result 封装
+* 全局异常
+* 工具类
+* Redis 配置
+* WebFlux 配置
+* JWT 工具
+* 常量类
+* Jackson 配置
+
+---
+
+## aiflow-auth
+
+用户认证模块。
+
+功能：
+
+* 用户登录
+* JWT Token 生成
+* Token 校验
+* 用户信息获取
+
+暂不实现复杂 RBAC。
+
+只保留：
+
+* 普通用户
+* 管理员
+
+---
+
+## aiflow-chat
+
+AI 对话模块。
+
+功能：
+
+* 用户聊天
+* SSE 流式输出
+* Redis 会话记忆
+* Prompt 拼接
+* 调用 Agent
+
+核心能力：
+
+* WebFlux
+* Flux
+* Server Sent Events
+
+接口：
+
+```plaintext
+POST /chat/send
+```
+
+要求：
+
+* 返回流式结果
+* 支持上下文记忆
+* 支持中断
+
+---
+
+## aiflow-rag
+
+RAG 核心模块。
+
+功能：
+
+* 文档切片
+* embedding
+* 向量存储
+* 相似度检索
+* TopK 召回
+
+核心流程：
+
+```plaintext
+用户问题
+-> embedding
+-> pgvector similarity search
+-> retrieve topK chunks
+-> prompt augmentation
+-> LLM generate
+```
+
+---
+
+## aiflow-file
+
+文件上传模块。
+
+功能：
+
+* 文件上传
+* PDF 解析
+* Markdown 解析
+* 文档异步处理
+* chunk 切片
+
+支持格式：
+
+* pdf
+* md
+* txt
+* docx
+
+上传流程：
+
+```plaintext
+upload file
+-> save metadata
+-> send MQ message
+-> async parse
+-> chunk
+-> embedding
+-> save vector
+```
+
+---
+
+## aiflow-agent
+
+Agent 模块。
+
+功能：
+
+* Tool Calling
+* Prompt 管理
+* Agent orchestration
+
+当前阶段只实现：
+
+简单 Tool Agent。
+
+不实现：
+
+* 多 Agent
+* Workflow DAG
+* MCP
+* Auto Planning
+
+---
+
+## aiflow-tools
+
+工具模块。
+
+当前实现两个 Tool：
+
+### WeatherTool
+
+```java
+String getWeather(String city)
+```
+
+### CourseSearchTool
+
+```java
+String queryCourse(String keyword)
+```
+
+Agent 可自动调用工具。
+
+---
+
+## aiflow-search
+
+检索模块。
+
+负责：
+
+* pgvector 查询
+* similarity search
+* keyword search
+
+后期可扩展：
+
+* Elasticsearch
+* Hybrid Search
+
+---
+
+# 6. 数据库设计
+
+数据库：
+
+PostgreSQL + pgvector
+
+---
+
+## knowledge_document
+
+```sql
+CREATE TABLE knowledge_document (
+    id BIGSERIAL PRIMARY KEY,
+    file_name VARCHAR(255),
+    file_type VARCHAR(50),
+    status VARCHAR(50),
+    created_at TIMESTAMP
+);
+```
+
+---
+
+## knowledge_chunk
+
+```sql
+CREATE TABLE knowledge_chunk (
+    id BIGSERIAL PRIMARY KEY,
+    document_id BIGINT,
+    chunk_index INT,
+    content TEXT,
+    embedding VECTOR(1024),
+    created_at TIMESTAMP
+);
+```
+
+说明：
+
+embedding 维度根据模型决定。
+
+---
+
+## chat_session
+
+```sql
+CREATE TABLE chat_session (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
+    title VARCHAR(255),
+    created_at TIMESTAMP
+);
+```
+
+---
+
+## chat_message
+
+```sql
+CREATE TABLE chat_message (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT,
+    role VARCHAR(20),
+    content TEXT,
+    created_at TIMESTAMP
+);
+```
+
+---
+
+# 7. Redis 设计
+
+Redis 用途：
+
+## 会话缓存
+
+key:
+
+```plaintext
+chat:memory:{sessionId}
+```
+
+---
+
+## SSE 状态
+
+key:
+
+```plaintext
+chat:sse:{sessionId}
+```
+
+---
+
+## 文档处理状态
+
+key:
+
+```plaintext
+doc:parse:{docId}
+```
+
+---
+
+# 8. RabbitMQ 设计
+
+Exchange：
+
+```plaintext
+rag.document.exchange
+```
+
+Queue：
+
+```plaintext
+rag.document.parse.queue
+```
+
+流程：
+
+```plaintext
+upload file
+-> send parse task
+-> async chunk
+-> embedding
+-> save vector
+```
+
+---
+
+# 9. RAG Pipeline 设计
+
+## 文档处理流程
+
+```plaintext
+上传文件
+-> 文档解析
+-> 文本清洗
+-> chunk 切片
+-> overlap
+-> embedding
+-> 向量存储
+```
+
+---
+
+## Query 流程
+
+```plaintext
+用户提问
+-> query embedding
+-> similarity search
+-> retrieve topK
+-> prompt augmentation
+-> LLM generate
+-> SSE stream response
+```
+
+---
+
+# 10. Chunk 策略
+
+初始策略：
+
+```plaintext
+chunk size: 500
+overlap: 100
+```
+
+要求：
+
+* 保持语义完整
+* 避免上下文丢失
+
+后期可扩展：
+
+* semantic chunk
+* recursive split
+
+---
+
+# 11. Prompt 策略
+
+System Prompt：
+
+```plaintext
+你是企业知识库 AI 助手。
+请基于提供的上下文回答问题。
+如果上下文不存在答案，请明确说明不知道。
+不要编造内容。
+```
+
+Prompt Template：
+
+```plaintext
+上下文：
+{context}
+
+用户问题：
+{question}
+```
+
+---
+
+# 12. AI API 配置
+
+统一使用 OpenAI Compatible API。
+
+支持：
+
+* DeepSeek
+* OpenAI
+* Ollama
+
+配置：
+
+```yaml
+spring:
+  ai:
+    openai:
+      base-url:
+      api-key:
+      chat:
+        options:
+          model:
+```
+
+---
+
+# 13. SSE 流式设计
+
+接口：
+
+```plaintext
+POST /chat/stream
+```
+
+返回：
+
+```plaintext
+text/event-stream
+```
+
+要求：
+
+* token 流式返回
+* 支持停止生成
+* 支持上下文记忆
+
+技术：
+
+* Spring WebFlux
+* Flux
+* MediaType.TEXT_EVENT_STREAM_VALUE
+
+---
+
+# 14. 开发优先级
+
+## 第一阶段
+
+必须先完成：
+
+* Spring AI 接入
+* AI 对话
+* SSE 流式输出
+
+---
+
+## 第二阶段
+
+完成：
+
+* 文件上传
+* PDF 解析
+* Chunk
+* Embedding
+
+---
+
+## 第三阶段
+
+完成：
+
+* pgvector
+* similarity search
+* RAG
+
+---
+
+## 第四阶段
+
+完成：
+
+* Redis Memory
+* Tool Calling
+* RabbitMQ 异步化
+
+---
+
+# 15. 编码规范
+
+要求：
+
+* 使用 Lombok
+* 使用统一 Result 返回
+* Controller 不写业务逻辑
+* Service 负责业务
+* Manager 负责复杂流程
+* 禁止硬编码
+* 使用构造器注入
+* 禁止 field injection
+
+---
+
+# 16. AI IDE 开发要求
+
+生成代码时：
+
+* 优先生成可运行代码
+* 优先保证结构清晰
+* 优先使用官方推荐 API
+* 不要过度抽象
+* 不要引入复杂设计模式
+* 不要生成无意义工具类
+* 优先使用 Spring Boot 3 最佳实践
+
+所有接口：
+
+* 必须提供 DTO
+* 必须提供 VO
+* 必须提供统一异常处理
+
+---
+
+# 17. 项目目标
+
+本项目目标：
+
+* 体现 AI 工程化能力
+* 体现 RAG 架构能力
+* 体现向量检索能力
+* 体现 Agent Tool Calling 能力
+* 体现高并发异步化思想
+* 满足 Java 后端实习简历项目要求
+
+不追求：
+
+* 商业化完整产品
+* 复杂前端
+* 大模型训练
+* 多 Agent 编排
+
+```
+```

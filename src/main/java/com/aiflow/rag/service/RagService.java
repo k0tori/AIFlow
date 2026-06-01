@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,22 +23,23 @@ public class RagService {
 
     private final Resource ragPrompt = new ClassPathResource("prompts/rag/rag-prompt.txt");
 
-    public String buildRagContext(String question) {
+    public Mono<String> buildRagContext(String question) {
         // Search for relevant chunks
-        List<KnowledgeChunk> chunks = searchService.search(question);
+        return searchService.search(question)
+                .map(chunks -> {
+                    // Build context
+                    String context = chunks.stream()
+                            .map(KnowledgeChunk::getContent)
+                            .collect(Collectors.joining("\n\n"));
 
-        // Build context
-        String context = chunks.stream()
-                .map(KnowledgeChunk::getContent)
-                .collect(Collectors.joining("\n\n"));
+                    // Load prompt template
+                    String template = readResource(ragPrompt);
 
-        // Load prompt template
-        String template = readResource(ragPrompt);
-
-        // Replace placeholders
-        return template
-                .replace("{context}", context)
-                .replace("{question}", question);
+                    // Replace placeholders
+                    return template
+                            .replace("{context}", context)
+                            .replace("{question}", question);
+                });
     }
 
     private String readResource(Resource resource) {

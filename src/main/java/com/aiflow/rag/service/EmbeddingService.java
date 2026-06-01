@@ -1,35 +1,43 @@
 package com.aiflow.rag.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingService {
 
-    private final EmbeddingClient embeddingClient;
+    private final EmbeddingModel embeddingModel;
 
-    public float[] embed(String text) {
-        try {
-            List<float[]> embeddings = embeddingClient.embed(List.of(text));
-            return embeddings.get(0);
-        } catch (Exception e) {
-            log.error("Failed to generate embedding", e);
-            throw new RuntimeException("Embedding failed", e);
-        }
+    public EmbeddingService(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel) {
+        this.embeddingModel = embeddingModel;
     }
 
-    public List<float[]> embedBatch(List<String> texts) {
-        try {
-            return embeddingClient.embed(texts);
-        } catch (Exception e) {
-            log.error("Failed to generate batch embeddings", e);
-            throw new RuntimeException("Batch embedding failed", e);
-        }
+    public Mono<float[]> embed(String text) {
+        return Mono.fromCallable(() -> {
+            try {
+                return embeddingModel.embed(text);
+            } catch (Exception e) {
+                log.error("Failed to generate embedding", e);
+                throw new RuntimeException("Embedding failed", e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<List<float[]>> embedBatch(List<String> texts) {
+        return Mono.fromCallable(() -> {
+            try {
+                return embeddingModel.embed(texts);
+            } catch (Exception e) {
+                log.error("Failed to generate batch embeddings", e);
+                throw new RuntimeException("Batch embedding failed", e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 }

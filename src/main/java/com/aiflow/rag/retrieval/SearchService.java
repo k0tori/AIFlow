@@ -6,6 +6,8 @@ import com.aiflow.rag.service.EmbeddingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 
@@ -19,19 +21,18 @@ public class SearchService {
 
     private static final int DEFAULT_TOP_K = 5;
 
-    public List<KnowledgeChunk> search(String query) {
+    public Mono<List<KnowledgeChunk>> search(String query) {
         return search(query, DEFAULT_TOP_K);
     }
 
-    public List<KnowledgeChunk> search(String query, int topK) {
+    public Mono<List<KnowledgeChunk>> search(String query, int topK) {
         // Generate query embedding
-        float[] queryEmbedding = embeddingService.embed(query);
-
-        // Convert to pgvector format
-        String vectorStr = convertToPgVector(queryEmbedding);
-
-        // Perform similarity search
-        return chunkMapper.similaritySearch(vectorStr, topK);
+        return embeddingService.embed(query)
+                .map(this::convertToPgVector)
+                .flatMap(vectorStr -> Mono.fromCallable(() -> {
+                    // Perform similarity search
+                    return chunkMapper.similaritySearch(vectorStr, topK);
+                }).subscribeOn(Schedulers.boundedElastic()));
     }
 
     private String convertToPgVector(float[] embedding) {

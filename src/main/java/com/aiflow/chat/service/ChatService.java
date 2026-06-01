@@ -34,8 +34,8 @@ public class ChatService {
         // Load history
         List<String> history = chatMemoryService.getHistory(request.getSessionId());
 
-        // Build RAG context
-        String ragContext = ragService.buildRagContext(request.getMessage());
+        // Save user message
+        chatMemoryService.addMessage(request.getSessionId(), "User", request.getMessage());
 
         // Build prompt
         String system = readResource(systemPrompt);
@@ -46,19 +46,24 @@ public class ChatService {
                 })
                 .collect(Collectors.joining("\n"));
 
-        String fullPrompt = system + "\n\n" + ragContext + "\n\n" + historyText + "\n\nUser: " + request.getMessage();
+        // Try RAG context, fallback to simple chat if it fails
+        return ragService.buildRagContext(request.getMessage())
+                .onErrorResume(e -> {
+                    log.warn("RAG context building failed, falling back to simple chat: {}", e.getMessage());
+                    return reactor.core.publisher.Mono.just("");
+                })
+                .flatMapMany(ragContext -> {
+                    String fullPrompt = system + "\n\n" + ragContext + "\n\n" + historyText + "\n\nUser: " + request.getMessage();
 
-        // Save user message
-        chatMemoryService.addMessage(request.getSessionId(), "User", request.getMessage());
-
-        // Stream response
-        ChatClient chatClient = chatClientBuilder.build();
-        return chatClient.prompt()
-                .user(fullPrompt)
-                .stream()
-                .content()
-                .doOnComplete(() -> {
-                    // TODO: Save assistant message and token usage
+                    // Stream response
+                    ChatClient chatClient = chatClientBuilder.build();
+                    return chatClient.prompt()
+                            .user(fullPrompt)
+                            .stream()
+                            .content()
+                            .doOnComplete(() -> {
+                                // TODO: Save assistant message and token usage
+                            });
                 });
     }
 

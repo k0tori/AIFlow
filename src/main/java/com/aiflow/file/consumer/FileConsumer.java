@@ -55,7 +55,7 @@ public class FileConsumer {
             // Generate embeddings and save
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
-                float[] embedding = embeddingService.embed(chunk);
+                float[] embedding = embeddingService.embed(chunk).block();
 
                 KnowledgeChunk knowledgeChunk = new KnowledgeChunk();
                 knowledgeChunk.setDocumentId(documentId);
