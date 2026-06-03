@@ -24,9 +24,14 @@ public class RagService {
     private final Resource ragPrompt = new ClassPathResource("prompts/rag/rag-prompt.txt");
 
     public Mono<String> buildRagContext(String question) {
-        // Search for relevant chunks
-        return searchService.search(question)
+        // Search for relevant chunks with rerank
+        return searchService.searchWithRerank(question)
                 .map(chunks -> {
+                    if (chunks.isEmpty()) {
+                        log.info("No relevant chunks found for question: {}", question);
+                        return "";
+                    }
+
                     // Build context
                     String context = chunks.stream()
                             .map(KnowledgeChunk::getContent)

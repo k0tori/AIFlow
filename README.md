@@ -8,7 +8,7 @@ AIFlow 是一个 AI Native 后端工程项目，实现了从文档上传、向�
 
 ## ✨ 核心功能
 
-- **RAG 知识库问答** — 文档上传后自动解析、切片、向量化，基于 pgvector 相似度检索进行增强生成
+- **RAG 知识库问答** — 文档上传后自动解析、切片、向量化，基于 pgvector 相似度检索 + BGE Rerank 重排序进行增强生成
 - **SSE 流式对话** — 基于 Spring WebFlux + Flux 实现 token 级别实时流式输出
 - **Tool Calling Agent** — LLM 自主决策调用内置工具（天气查询、课程搜索）
 - **Redis 会话记忆** — 对话上下文持久化，支持多轮连续对话，自动 Token Window 裁剪
@@ -24,7 +24,8 @@ AIFlow 是一个 AI Native 后端工程项目，实现了从文档上传、向�
 | **后端框架** | Java 21、Spring Boot 3.4.x、Spring WebFlux |
 | **AI 能力** | Spring AI 1.0.x、OpenAI Compatible API、DeepSeek、Ollama |
 | **向量数据库** | PostgreSQL 16 + pgvector（IVFFlat 索引，余弦相似度） |
-| **Embedding** | BGE-M3（1024 维，中文效果优秀，支持本地部署） |
+| **Embedding** | Ollama + qwen3-embedding（本地部署） |
+| **Rerank** | BGE-Reranker-v2-M3（Cross-Encoder 重排序，本地 CPU 推理） |
 | **缓存 / 会话** | Redis 7（会话记忆、SSE 状态、文档处理状态） |
 | **消息队列** | RabbitMQ 3（文档异步 Embedding 解耦） |
 | **ORM** | MyBatis-Plus、Flyway 数据库版本管理 |
@@ -44,7 +45,11 @@ AIFlow 是一个 AI Native 后端工程项目，实现了从文档上传、向�
   ↓
 Redis 加载会话记忆（最近 10 轮，超限自动裁剪）
   ↓
-RAG 检索增强（Query Embedding → pgvector 相似度检索 → TopK 召回）
+RAG 检索增强
+  ├── Query Embedding（qwen3-embedding）
+  ├── pgvector 相似度检索（Top-K=20 召回）
+  ├── BGE Rerank 重排序（Cross-Encoder 精排 → Top-N=5）
+  └── 组装上下文
   ↓
 Prompt Augmentation（system-prompt + context + question 拼接）
   ↓
@@ -76,14 +81,16 @@ src/main/java/com/aiflow/
 ├── common/          # 公共模块：Result封装、全局异常、JWT工具、Redis/WebFlux配置
 ├── auth/            # 认证模块：登录、JWT生成与校验、Security Filter
 ├── chat/            # 对话模块：SSE流式接口、会话记忆、Prompt拼接
-├── rag/             # RAG核心：Embedding、向量检索、文档解析、Chunk切片
+├── rag/             # RAG核心：Embedding、向量检索、Rerank重排序、文档解析、Chunk切片
 │   ├── parser/      #   PdfParser / MarkdownParser / TxtParser / DocxParser
 │   ├── chunk/       #   ChunkSplitter（固定窗口 + overlap）
 │   ├── service/     #   EmbeddingService、RagService
-│   └── retrieval/   #   SearchService（pgvector 相似度查询）
+│   ├── retrieval/   #   SearchService（pgvector 相似度查询 + Rerank）
+│   └── rerank/      #   RerankService（BGE Cross-Encoder 重排序）
 ├── agent/           # Agent模块：Tool Calling、Prompt管理
 │   └── tool/        #   WeatherTool、CourseSearchTool
 └── file/            # 文件模块：上传接口、MQ消费、异步处理
+reranker/            # Python Rerank 微服务（bge-reranker-v2-m3）
 ```
 
 ---
@@ -159,17 +166,20 @@ CREATE TABLE chat_usage (
 # 复制环境变量模板并填写密码
 cp .env.example .env
 
-# 启动 PostgreSQL(pgvector)、Redis、RabbitMQ、Ollama
+# 启动 PostgreSQL(pgvector)、Redis、RabbitMQ、Ollama、Rerank
 docker compose up -d
 ```
 
-| 服务 | 端口 |
-|------|------|
-| PostgreSQL | 15432 |
-| Redis | 16379 |
-| RabbitMQ AMQP | 15672 |
-| RabbitMQ Dashboard | 25672 |
-| Ollama | 11434 |
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| PostgreSQL | 15432 | pgvector 向量数据库 |
+| Redis | 16379 | 会话记忆缓存 |
+| RabbitMQ AMQP | 15673 | 消息队列 |
+| RabbitMQ Dashboard | 25672 | 管理后台 |
+| Ollama | 11434 | Embedding 模型服务 |
+| Rerank | 8787 | BGE Reranker 重排序服务 |
+
+> **注意**：Rerank 服务首次启动会自动下载 bge-reranker-v2-m3 模型（约 1.1GB），请耐心等待健康检查通过。
 
 ### 2. 配置 AI API
 
@@ -270,11 +280,12 @@ resources/prompts/
 
 ## 🏆 项目亮点
 
-1. **完整 RAG Pipeline** — 覆盖文档解析、Chunk 切片、BGE-M3 Embedding、pgvector 存储与检索的完整闭环
-2. **响应式异步架构** — Spring WebFlux + RabbitMQ 实现高并发非阻塞，文档处理与对话完全异步解耦
-3. **AI 工程化实践** — Prompt 外置管理、Token Usage 统计、会话 Window 裁剪、IVFFlat 向量索引优化
-4. **Tool Calling** — 基于 Spring AI `@Tool` 注解实现 LLM 自主工具调用
-5. **可扩展设计** — 解析器策略模式（DocumentParser 接口）、Chunk 策略可替换、检索层预留 Hybrid Search 扩展点
+1. **完整 RAG Pipeline** — 覆盖文档解析、Chunk 切片、Embedding、pgvector 检索、Cross-Encoder Rerank 重排序的完整闭环
+2. **Retrieve → Rerank → Generate** — 两阶段检索：向量相似度粗召回（Top-K=20）+ Cross-Encoder 精排序（Top-N=5），显著提升检索质量
+3. **响应式异步架构** — Spring WebFlux + RabbitMQ 实现高并发非阻塞，文档处理与对话完全异步解耦
+4. **AI 工程化实践** — Prompt 外置管理、Token Usage 统计、会话 Window 裁剪、IVFFlat 向量索引优化
+5. **Tool Calling** — 基于 Spring AI `@Tool` 注解实现 LLM 自主工具调用
+6. **可扩展设计** — 解析器策略模式（DocumentParser 接口）、Chunk 策略可替换、Rerank 服务可插拔（feature toggle）
 
 ---
 

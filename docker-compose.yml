@@ -35,7 +35,7 @@ services:
     container_name: aiflow-rabbitmq
     restart: unless-stopped
     ports:
-      - "15672:5672"
+      - "15673:5672"
       - "25672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
@@ -63,4 +63,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  rerank:
+    build:
+      context: ./reranker
+    container_name: aiflow-rerank
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - MAX_LENGTH=1024
+      - MODEL=BAAI/bge-reranker-v2-m3
+      - DEVICE=cpu
+    volumes:
+      - /home/kotori/AIFlow/data/reranker-models:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
 

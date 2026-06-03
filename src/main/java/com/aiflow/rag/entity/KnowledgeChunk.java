@@ -10,5 +10,6 @@ public class KnowledgeChunk {
     private Integer chunkIndex;
     private String content;
     private float[] embedding;
+    private Double similarity;
     private LocalDateTime createdAt;
 }
