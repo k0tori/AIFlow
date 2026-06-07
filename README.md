@@ -246,11 +246,20 @@ Content-Type: application/json
 
 ## 📸 效果展示
 
-### SSE 流式对话
+### RAG 知识库问答（SSE 流式对话）
 
-<img src="./sse-streaming-demo-1.png" width="800" alt="SSE 流式对话请求">
+**请求（含 JWT 鉴权）**
 
-<img src="./sse-streaming-demo-2.png" width="800" alt="SSE 流式对话响应">
+<img src="./sse-rag-request.png" width="800" alt="RAG 问答请求">
+
+**SSE 流式输出过程**
+
+<img src="./sse-rag-stream-1.png" width="800" alt="SSE 流式输出 1">
+<img src="./sse-rag-stream-2.png" width="800" alt="SSE 流式输出 2">
+
+**合并后的完整回复（基于知识库检索内容生成）**
+
+<img src="./sse-rag-response.png" width="800" alt="RAG 完整回复">
 
 ---
 
