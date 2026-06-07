@@ -9,11 +9,14 @@ import java.util.List;
 @Mapper
 public interface KnowledgeChunkMapper extends BaseMapper<KnowledgeChunk> {
 
-    @Select("SELECT id, document_id, chunk_index, content, " +
-            "1 - (embedding <=> #{vector}::vector) AS similarity " +
-            "FROM knowledge_chunk " +
-            "ORDER BY embedding <=> #{vector}::vector " +
-            "LIMIT #{topK}")
+    @Select("WITH ranked AS (" +
+            "  SELECT id, document_id, chunk_index, content, " +
+            "         1 - (embedding <=> #{vector}::vector) AS similarity," +
+            "         ROW_NUMBER() OVER (ORDER BY embedding <=> #{vector}::vector) as rn" +
+            "  FROM knowledge_chunk" +
+            ") " +
+            "SELECT id, document_id, chunk_index, content, similarity " +
+            "FROM ranked WHERE rn <= #{topK}")
     @Results({
             @Result(column = "id", property = "id"),
             @Result(column = "document_id", property = "documentId"),

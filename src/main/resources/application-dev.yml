@@ -33,7 +33,7 @@ spring:
   # ----- RabbitMQ -----
   rabbitmq:
     host: localhost
-    port: 15672
+    port: 15673
     username: admin
     password: 123456
     virtual-host: /
