@@ -248,9 +248,9 @@ Content-Type: application/json
 
 ### SSE 流式对话
 
-<img src="./屏幕截图%202026-06-07%20211611.png" width="800" alt="SSE 流式对话请求">
+<img src="./sse-streaming-demo-1.png" width="800" alt="SSE 流式对话请求">
 
-<img src="./屏幕截图%202026-06-07%20211632.png" width="800" alt="SSE 流式对话响应">
+<img src="./sse-streaming-demo-2.png" width="800" alt="SSE 流式对话响应">
 
 ---
 
