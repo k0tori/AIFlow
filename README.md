@@ -71,7 +71,7 @@ RabbitMQ 发送解析任务
   ↓
 异步消费：文档解析 → 文本清洗 → Chunk 切片（size=500, overlap=100）
   ↓
-BGE-M3 Embedding → pgvector 批量写入
+qwen3-embedding → pgvector 批量写入
 ```
 
 ### 项目目录结构
@@ -113,7 +113,7 @@ CREATE TABLE knowledge_chunk (
     document_id BIGINT,
     chunk_index INT,
     content     TEXT,
-    embedding   vector(1024),   -- BGE-M3 维度
+    embedding   vector(1024),   -- qwen3-embedding 维度
     created_at  TIMESTAMP
 );
 
@@ -244,6 +244,16 @@ Content-Type: application/json
 
 ---
 
+## 📸 效果展示
+
+### SSE 流式对话
+
+<img src="./屏幕截图%202026-06-07%20211611.png" width="800" alt="SSE 流式对话请求">
+
+<img src="./屏幕截图%202026-06-07%20211632.png" width="800" alt="SSE 流式对话响应">
+
+---
+
 ## 🔑 Redis Key 设计
 
 | Key | 用途 |
@@ -280,7 +290,7 @@ resources/prompts/
 
 ## 🏆 项目亮点
 
-1. **完整 RAG Pipeline** — 覆盖文档解析、Chunk 切片、Embedding、pgvector 检索、Cross-Encoder Rerank 重排序的完整闭环
+1. **完整 RAG Pipeline** —  独立实现从文档上传、解析（PDF/DOCX/MD/TXT）、Chunk 切片、Embedding 向量化、pgvector 存储与检索到增强生成的全链路，未依赖 Spring AI 的 RAG 自动装配，具备对每一环节的完整控制能力
 2. **Retrieve → Rerank → Generate** — 两阶段检索：向量相似度粗召回（Top-K=20）+ Cross-Encoder 精排序（Top-N=5），显著提升检索质量
 3. **响应式异步架构** — Spring WebFlux + RabbitMQ 实现高并发非阻塞，文档处理与对话完全异步解耦
 4. **AI 工程化实践** — Prompt 外置管理、Token Usage 统计、会话 Window 裁剪、IVFFlat 向量索引优化
