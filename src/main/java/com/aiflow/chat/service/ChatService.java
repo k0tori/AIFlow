@@ -1,4 +1,4 @@
-package com.aiflow.chat.service;
+﻿package com.aiflow.chat.service;
 
 import com.aiflow.agent.service.AgentService;
 import com.aiflow.chat.dto.ChatRequest;
@@ -15,6 +15,7 @@ import reactor.core.publisher.Flux;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -55,26 +56,65 @@ public class ChatService {
                 .flatMapMany(ragContext -> {
                     String fullPrompt = system + "\n\n" + ragContext + "\n\n" + historyText + "\n\nUser: " + request.getMessage();
 
+                    // Collect streamed content for persistence
+                    StringJoiner responseCollector = new StringJoiner("");
+
                     // Stream response
                     ChatClient chatClient = chatClientBuilder.build();
                     return chatClient.prompt()
                             .user(fullPrompt)
                             .stream()
                             .content()
+                            .doOnNext(token -> responseCollector.add(token))
                             .doOnComplete(() -> {
-                                // TODO: Save assistant message and token usage
+                                try {
+                                    String fullResponse = responseCollector.toString();
+                                    // Save assistant message to Redis memory
+                                    chatMemoryService.addMessage(request.getSessionId(), "Assistant", fullResponse);
+                                    // Record token usage (estimate from character count)
+                                    int estimatedTokens = fullResponse.length() / 2;
+                                    tokenUsageService.saveUsage(request.getSessionId(), "deepseek-chat", 0, estimatedTokens);
+                                    log.debug("Saved assistant message for session: {}, length: {}", request.getSessionId(), fullResponse.length());
+                                } catch (Exception e) {
+                                    log.error("Failed to save assistant message for session: {}", request.getSessionId(), e);
+                                }
                             });
                 });
     }
 
     public Flux<String> streamAgentChat(ChatRequest request) {
+        // Load history for agent context
+        List<String> history = chatMemoryService.getHistory(request.getSessionId());
+
         // Save user message
         chatMemoryService.addMessage(request.getSessionId(), "User", request.getMessage());
 
+        // Build context from history
+        String historyText = history.stream()
+                .map(h -> {
+                    String[] parts = h.split(":", 2);
+                    return parts.length == 2 ? parts[0] + ": " + parts[1] : h;
+                })
+                .collect(Collectors.joining("\n"));
+
+        String agentInput = historyText.isEmpty()
+                ? request.getMessage()
+                : historyText + "\n\nUser: " + request.getMessage();
+
+        // Collect streamed content for persistence
+        StringJoiner responseCollector = new StringJoiner("");
+
         // Use agent with tools
-        return agentService.streamAgent(request.getMessage())
+        return agentService.streamAgent(agentInput)
+                .doOnNext(token -> responseCollector.add(token))
                 .doOnComplete(() -> {
-                    // TODO: Save assistant message
+                    try {
+                        String fullResponse = responseCollector.toString();
+                        chatMemoryService.addMessage(request.getSessionId(), "Assistant", fullResponse);
+                        log.debug("Saved agent response for session: {}, length: {}", request.getSessionId(), fullResponse.length());
+                    } catch (Exception e) {
+                        log.error("Failed to save agent response for session: {}", request.getSessionId(), e);
+                    }
                 });
     }
 

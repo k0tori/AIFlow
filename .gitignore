@@ -70,3 +70,8 @@ node/
 *.swp
 *.swo
 *~
+bash.exe.stackdump
+*.stackdump
+
+# === Upload files ===
+upload/
