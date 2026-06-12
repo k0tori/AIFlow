@@ -12,10 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
 import java.io.FileInputStream;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -29,7 +29,7 @@ public class FileConsumer {
     private final KnowledgeChunkMapper chunkMapper;
 
     @RabbitListener(queues = "rag.document.parse.queue")
-    public void handleParseMessage(java.util.Map<String, Object> message) {
+    public void handleParseMessage(Map<String, Object> message) {
         Long documentId = ((Number) message.get("documentId")).longValue();
         String fileType = (String) message.get("fileType");
         String filePath = (String) message.get("filePath");
@@ -42,13 +42,16 @@ public class FileConsumer {
             document.setStatus("PROCESSING");
             documentMapper.updateById(document);
 
-            // Parse document
+            // Parse document (with proper resource management)
             DocumentParser parser = parsers.stream()
                     .filter(p -> p.supportsType().equals(fileType))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("No parser for type: " + fileType));
 
-            String content = parser.parse(new FileInputStream(filePath));
+            String content;
+            try (FileInputStream fis = new FileInputStream(filePath)) {
+                content = parser.parse(fis);
+            }
 
             // Split into chunks
             List<String> chunks = chunkSplitter.split(content);
