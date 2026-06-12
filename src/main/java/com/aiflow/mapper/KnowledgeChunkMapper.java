@@ -25,4 +25,9 @@ public interface KnowledgeChunkMapper extends BaseMapper<KnowledgeChunk> {
             @Result(column = "similarity", property = "similarity")
     })
     List<KnowledgeChunk> similaritySearch(@Param("vector") String vector, @Param("topK") int topK);
+
+    /**
+     * Batch insert chunks (defined in KnowledgeChunkMapper.xml).
+     */
+    int insertBatch(@Param("list") List<KnowledgeChunk> chunks);
 }

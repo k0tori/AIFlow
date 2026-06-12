@@ -176,20 +176,6 @@
             <version>${hutool.version}</version>
         </dependency>
 
-        <!-- Apache POI (DOCX parsing) -->
-        <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml</artifactId>
-            <version>5.2.5</version>
-        </dependency>
-
-        <!-- Apache PDFBox (PDF parsing) -->
-        <dependency>
-            <groupId>org.apache.pdfbox</groupId>
-            <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
-        </dependency>
-
         <!-- Jackson (included via spring-boot-starter-webflux, explicit for clarity) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

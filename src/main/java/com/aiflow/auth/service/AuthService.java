@@ -2,9 +2,13 @@ package com.aiflow.auth.service;
 
 import com.aiflow.auth.dto.LoginRequest;
 import com.aiflow.auth.dto.LoginResponse;
+import com.aiflow.auth.entity.User;
 import com.aiflow.common.exception.BusinessException;
 import com.aiflow.common.util.JwtUtil;
+import com.aiflow.mapper.UserMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -12,25 +16,24 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final JwtUtil jwtUtil;
+    private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
 
-    /**
-     * Authenticate user with hardcoded credentials (temporary).
-     *
-     * @param request the login request containing username and password
-     * @return the login response with JWT token
-     * @throws BusinessException if credentials are invalid
-     */
     public LoginResponse login(LoginRequest request) {
-        // Temporary hardcoded check: admin/123456 -> userId=1
-        if ("admin".equals(request.getUsername()) && "123456".equals(request.getPassword())) {
-            String token = jwtUtil.generateToken(1L, "admin");
-            return LoginResponse.builder()
-                    .token(token)
-                    .userId(1L)
-                    .username("admin")
-                    .build();
+        // Query user from database
+        User user = userMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getUsername, request.getUsername())
+        );
+
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BusinessException(401, "Invalid username or password");
         }
 
-        throw new BusinessException(401, "Invalid username or password");
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername());
+        return LoginResponse.builder()
+                .token(token)
+                .userId(user.getId())
+                .username(user.getUsername())
+                .build();
     }
 }

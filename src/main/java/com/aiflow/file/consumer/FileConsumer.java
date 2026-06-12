@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.io.FileInputStream;
 import java.util.List;
@@ -41,28 +42,42 @@ public class FileConsumer {
             document.setStatus("PROCESSING");
             documentMapper.updateById(document);
 
-            // Parse document
+            // Parse document (with proper resource management)
             DocumentParser parser = parsers.stream()
                     .filter(p -> p.supportsType().equals(fileType))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("No parser for type: " + fileType));
 
-            String content = parser.parse(new FileInputStream(filePath));
+            String content;
+            try (FileInputStream fis = new FileInputStream(filePath)) {
+                content = parser.parse(fis);
+            }
 
             // Split into chunks
             List<String> chunks = chunkSplitter.split(content);
 
-            // Generate embeddings and save
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = chunks.get(i);
-                float[] embedding = embeddingService.embed(chunk).block();
+            // Generate embeddings in parallel, then batch insert
+            List<KnowledgeChunk> knowledgeChunks = Flux.fromIterable(chunks)
+                    .index()
+                    .flatMap(tuple -> {
+                        int index = tuple.getT1().intValue();
+                        String chunkText = tuple.getT2();
+                        return embeddingService.embed(chunkText)
+                                .map(embedding -> {
+                                    KnowledgeChunk kc = new KnowledgeChunk();
+                                    kc.setDocumentId(documentId);
+                                    kc.setChunkIndex(index);
+                                    kc.setContent(chunkText);
+                                    kc.setEmbedding(embedding);
+                                    return kc;
+                                });
+                    }, 4) // concurrency 4 for parallel embedding
+                    .collectList()
+                    .block();
 
-                KnowledgeChunk knowledgeChunk = new KnowledgeChunk();
-                knowledgeChunk.setDocumentId(documentId);
-                knowledgeChunk.setChunkIndex(i);
-                knowledgeChunk.setContent(chunk);
-                knowledgeChunk.setEmbedding(embedding);
-                chunkMapper.insert(knowledgeChunk);
+            // Batch insert chunks
+            if (knowledgeChunks != null && !knowledgeChunks.isEmpty()) {
+                chunkMapper.insertBatch(knowledgeChunks);
             }
 
             // Update status to COMPLETED
@@ -75,8 +90,10 @@ public class FileConsumer {
 
             // Update status to FAILED
             KnowledgeDocument document = documentMapper.selectById(documentId);
-            document.setStatus("FAILED");
-            documentMapper.updateById(document);
+            if (document != null) {
+                document.setStatus("FAILED");
+                documentMapper.updateById(document);
+            }
         }
     }
 }
