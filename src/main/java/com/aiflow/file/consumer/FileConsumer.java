@@ -1,4 +1,4 @@
-﻿package com.aiflow.file.consumer;
+package com.aiflow.file.consumer;
 
 import com.aiflow.rag.chunk.ChunkSplitter;
 import com.aiflow.rag.entity.KnowledgeChunk;

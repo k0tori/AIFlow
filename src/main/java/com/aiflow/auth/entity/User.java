@@ -1,4 +1,4 @@
-﻿package com.aiflow.auth.entity;
+package com.aiflow.auth.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;

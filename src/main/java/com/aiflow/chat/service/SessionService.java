@@ -1,4 +1,4 @@
-﻿package com.aiflow.chat.service;
+package com.aiflow.chat.service;
 
 import com.aiflow.chat.entity.ChatSession;
 import com.aiflow.chat.memory.ChatMemoryService;

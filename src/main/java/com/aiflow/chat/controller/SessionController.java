@@ -1,4 +1,4 @@
-﻿package com.aiflow.chat.controller;
+package com.aiflow.chat.controller;
 
 import com.aiflow.chat.entity.ChatSession;
 import com.aiflow.chat.service.SessionService;

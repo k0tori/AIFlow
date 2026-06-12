@@ -1,4 +1,4 @@
-﻿package com.aiflow.mapper;
+package com.aiflow.mapper;
 
 import com.aiflow.rag.entity.KnowledgeChunk;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;

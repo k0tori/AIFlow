@@ -1,4 +1,4 @@
-﻿package com.aiflow.chat.service;
+package com.aiflow.chat.service;
 
 import com.aiflow.agent.service.AgentService;
 import com.aiflow.chat.dto.ChatRequest;

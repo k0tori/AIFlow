@@ -1,4 +1,4 @@
-﻿package com.aiflow.file.service;
+package com.aiflow.file.service;
 
 import com.aiflow.common.config.RabbitMqConfig;
 import com.aiflow.rag.entity.KnowledgeDocument;
